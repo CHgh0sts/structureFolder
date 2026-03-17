@@ -42,6 +42,8 @@ next-env.d.ts
 
 # File Organizer data (config user, logs)
 /data/*.json
+/data/*.port
+/data/*.log
 /scripts/_launcher.vbs
 
 # Icônes générées
