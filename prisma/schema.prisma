@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Utilisateur admin ────────────────────────────────────────
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String   // bcrypt hash
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// ─── Configuration globale de l'application ──────────────────
+model AppConfig {
+  id                 Int      @id @default(autoincrement())
+  siteName           String   @default("File Organizer")
+  watchFolders       String[] // chemins absolus des dossiers surveillés
+  defaultDestination String
+  recursive          Boolean  @default(false) // traiter les sous-dossiers récursivement
+  excludedFolders    String[] // dossiers à ignorer lors du scan récursif
+  initialized        Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("app_config")
+}
+
+// ─── Règles de tri hiérarchiques ──────────────────────────────
+model Rule {
+  id              String   @id @default(cuid())
+  name            String
+  priority        Int      @default(1)
+  extensions      String[] // ex: [".mp4", ".mkv"] ou vide = tous
+  filters         Json     @default("[]") // [{type, value}]
+  destination     String   // peut contenir des templates {varName}
+  platforms       String[] // ["win32","darwin","linux"] ou vide = tous
+  capturePatterns Json     @default("[]") // [{id, source:"filename"|"path", regex}]
+  renameTemplate  String?  // template optionnel pour renommer: "S{season:02}E{episode:02}.{ext}"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("rules")
+}
+
+// ─── Journal d'activité ───────────────────────────────────────
+model Log {
+  id          String   @id @default(cuid())
+  type        String   // "success" | "error" | "warning" | "info"
+  message     String
+  file        String?
+  destination String?
+  rule        String?  // nom de la règle appliquée
+  createdAt   DateTime @default(now())
+
+  @@map("logs")
+}
+
+// ─── Fichiers déjà traités (évite les doublons) ──────────────
+model ProcessedFile {
+  id        Int      @id @default(autoincrement())
+  path      String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("processed_files")
+}

@@ -39,3 +39,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# File Organizer data (config user, logs)
+/data/*.json
+/scripts/_launcher.vbs
+
+# Icônes générées
+/public/icons/*.png
+
+# PWA generated
+/public/workbox-*.js
+/public/sw.js.map
+
+/src/generated/prisma
