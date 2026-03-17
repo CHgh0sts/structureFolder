@@ -107,6 +107,16 @@ function matchesRule(filePath, rule) {
   const ext      = path.extname(filePath).toLowerCase();
   const platform = process.platform;
 
+  // Restriction aux dossiers sources configurés (vide = tous)
+  if (rule.sourceFolders?.length > 0) {
+    const normalized = path.normalize(filePath);
+    const inFolder = rule.sourceFolders.some(f => {
+      const nf = path.normalize(f);
+      return normalized.startsWith(nf + path.sep) || normalized === nf;
+    });
+    if (!inFolder) return false;
+  }
+
   if (rule.platforms?.length > 0 && !rule.platforms.includes(platform)) return false;
 
   if (rule.extensions?.length > 0) {
@@ -124,9 +134,10 @@ function matchesRule(filePath, rule) {
   return true;
 }
 
-export function findMatchingRule(filePath, rules) {
+export function findMatchingRule(filePath, rules, { ignoreEnabled = false } = {}) {
   if (!rules?.length) return null;
-  const sorted = [...rules].sort((a, b) => (a.priority || 99) - (b.priority || 99));
+  const active = ignoreEnabled ? rules : rules.filter(r => r.enabled !== false);
+  const sorted = [...active].sort((a, b) => (a.priority || 99) - (b.priority || 99));
   return sorted.find(r => matchesRule(filePath, r)) ?? null;
 }
 

@@ -19,7 +19,7 @@ const PLATFORMS = [
 ];
 
 const DEFAULT_RULE = {
-  name: "", priority: 1, extensions: [], filters: [],
+  name: "", priority: 1, sourceFolders: [], extensions: [], filters: [],
   destination: "", platforms: [], capturePatterns: [], renameTemplate: "",
 };
 
@@ -113,7 +113,7 @@ function VarPill({ name, value, builtin }) {
 /* ═══════════════════════════════════════════════════════════════
    MAIN
 ═══════════════════════════════════════════════════════════════ */
-export default function RuleModal({ open, onClose, onSave, rule = null, totalRules = 0 }) {
+export default function RuleModal({ open, onClose, onSave, rule = null, totalRules = 0, sourceFolders = [] }) {
   const [form, setForm]           = useState(DEFAULT_RULE);
   const [extInput, setExtInput]   = useState("");
   const [testFile, setTestFile]   = useState("voiranime - toto episode 1 saison 1 VOSTFR.mp4");
@@ -126,6 +126,7 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
       base.capturePatterns = Array.isArray(base.capturePatterns)
         ? base.capturePatterns
         : (() => { try { return JSON.parse(base.capturePatterns || "[]"); } catch { return []; } })();
+      base.sourceFolders = Array.isArray(base.sourceFolders) ? base.sourceFolders : [];
       base.renameTemplate = base.renameTemplate || "";
       setForm(base);
       setExtInput("");
@@ -566,6 +567,76 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
               </div>
             </Section>
           )}
+
+          {/* ── Dossiers sources ──────────────────────────────── */}
+          <Section
+            title="Dossiers sources"
+            sub={sourceFolders.length === 0 ? "Aucun dossier configuré dans les paramètres" : "Vide = tous les dossiers surveillés"}
+          >
+            {sourceFolders.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: "var(--text-3)", fontStyle: "italic" }}>
+                Configurez d&apos;abord des dossiers à surveiller dans les Paramètres.
+              </p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {/* Bouton Tous */}
+                <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 8,
+                  background: form.sourceFolders.length === 0 ? "rgba(91,95,203,.1)" : "transparent",
+                  border: `1px solid ${form.sourceFolders.length === 0 ? "rgba(91,95,203,.3)" : "var(--border)"}`,
+                  transition: "all .15s",
+                }}>
+                  <input type="checkbox"
+                    checked={form.sourceFolders.length === 0}
+                    onChange={() => setForm(f => ({ ...f, sourceFolders: [] }))}
+                    style={{ accentColor: "var(--primary)", cursor: "pointer", width: 15, height: 15 }}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: form.sourceFolders.length === 0 ? "var(--primary-light)" : "var(--text-2)" }}>
+                      Tous les dossiers
+                    </span>
+                    <p style={{ fontSize: 11.5, color: "var(--text-3)", marginTop: 1 }}>La règle s&apos;applique à tous les dossiers surveillés</p>
+                  </div>
+                </label>
+                {/* Séparateur */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>ou restreindre à</span>
+                  <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                </div>
+                {/* Dossiers individuels */}
+                {sourceFolders.map(folder => {
+                  const checked = form.sourceFolders.includes(folder);
+                  return (
+                    <label key={folder} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 12px", borderRadius: 8,
+                      background: checked ? "rgba(14,165,114,.07)" : "transparent",
+                      border: `1px solid ${checked ? "rgba(14,165,114,.25)" : "var(--border)"}`,
+                      transition: "all .15s",
+                    }}>
+                      <input type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setForm(f => ({
+                            ...f,
+                            sourceFolders: checked
+                              ? f.sourceFolders.filter(x => x !== folder)
+                              : [...f.sourceFolders, folder],
+                          }));
+                        }}
+                        style={{ accentColor: "#0ea572", cursor: "pointer", width: 15, height: 15, flexShrink: 0 }}
+                      />
+                      <span style={{
+                        fontSize: 12.5, fontFamily: "monospace",
+                        color: checked ? "#34d399" : "var(--text-2)",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        {folder}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
 
           {/* ── Plateformes ───────────────────────────────────── */}
           <Section title="Restreindre à certains OS" sub="Vide = tous les systèmes">

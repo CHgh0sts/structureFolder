@@ -111,6 +111,8 @@ export async function createRule(data) {
     id: `rule-${randomBytes(6).toString("hex")}`,
     name: data.name || `Règle ${rules.length + 1}`,
     priority: data.priority ?? rules.length + 1,
+    enabled: false, // désactivée par défaut
+    sourceFolders: data.sourceFolders ?? [], // vide = tous les dossiers
     extensions: data.extensions ?? [],
     filters: data.filters ?? [],
     destination: data.destination,
@@ -137,6 +139,8 @@ export async function updateRule(id, data) {
 export async function updateAllRules(newRules) {
   const mapped = newRules.map((r) => ({
     ...r,
+    enabled: r.enabled ?? false,
+    sourceFolders: r.sourceFolders ?? [],
     capturePatterns: r.capturePatterns ?? [],
     renameTemplate: r.renameTemplate || null,
     updatedAt: new Date().toISOString(),

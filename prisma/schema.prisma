@@ -43,6 +43,8 @@ model Rule {
   filters         Json     @default("[]") // [{type, value}]
   destination     String   // peut contenir des templates {varName}
   platforms       String[] // ["win32","darwin","linux"] ou vide = tous
+  enabled         Boolean  @default(false) // désactivée par défaut à la création
+  sourceFolders   String[] // dossiers sources auxquels la règle s'applique (vide = tous)
   capturePatterns Json     @default("[]") // [{id, source:"filename"|"path", regex}]
   renameTemplate  String?  // template optionnel pour renommer: "S{season:02}E{episode:02}.{ext}"
   createdAt       DateTime @default(now())

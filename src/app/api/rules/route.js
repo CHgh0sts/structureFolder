@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRules, createRule, updateAllRules, deleteRule } from "@/lib/config";
+import { getRules, createRule, updateRule, updateAllRules, deleteRule } from "@/lib/config";
 import { getSession } from "@/lib/auth";
 
 export async function GET() {
@@ -46,6 +46,25 @@ export async function PUT(request) {
     await updateAllRules(rules);
     const updated = await getRules();
     return NextResponse.json({ success: true, rules: updated });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
+  const { id, enabled } = await request.json();
+  if (!id || typeof enabled !== "boolean") {
+    return NextResponse.json({ error: "id et enabled (boolean) requis" }, { status: 400 });
+  }
+
+  try {
+    const updated = await updateRule(id, { enabled });
+    return NextResponse.json({ success: true, rule: updated });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

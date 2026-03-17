@@ -119,9 +119,10 @@ function LogRow({ log, full }) {
     <div style={{
       display: "flex", gap: 12, padding: "10px 14px", borderRadius: 8,
       background: c.bg, borderLeft: `3px solid ${c.bar}`, marginBottom: 6,
+      minWidth: 0, overflow: "hidden",
     }}>
       <I n={c.icon} size={13} color={c.text} style={{ flexShrink: 0, marginTop: 1 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
           <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "monospace" }}>
             {full ? new Date(ts).toLocaleString("fr-FR") : new Date(ts).toLocaleTimeString("fr-FR")}
@@ -170,6 +171,11 @@ export default function DashboardClient({ initialConfig }) {
     recursive: initialConfig.recursive ?? false,
     excludedFolders: initialConfig.excludedFolders ?? [],
   });
+
+  // Modal de confirmation pour toggle activer/désactiver
+  const [toggleModal, setToggleModal] = useState(null); // { rule, newEnabled }
+  // Modal de résultats de test
+  const [testModal, setTestModal] = useState(null); // { rule, loading, results }
 
   function showToast(msg, type = "success") {
     setToast({ msg, type });
@@ -246,6 +252,37 @@ export default function DashboardClient({ initialConfig }) {
     const updated = n.map((r, i) => ({ ...r, priority: i + 1 }));
     await fetch("/api/rules", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rules: updated }) });
     setRules(updated);
+  }
+
+  async function confirmToggle() {
+    const { rule, newEnabled } = toggleModal;
+    setToggleModal(null);
+    const r = await fetch("/api/rules", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: rule.id, enabled: newEnabled }),
+    });
+    if (r.ok) {
+      setRules(prev => prev.map(x => x.id === rule.id ? { ...x, enabled: newEnabled } : x));
+      showToast(newEnabled ? `"${rule.name}" activée` : `"${rule.name}" désactivée`, newEnabled ? "success" : "info");
+    } else {
+      showToast("Erreur lors de la mise à jour", "error");
+    }
+  }
+
+  async function runTest(rule) {
+    setTestModal({ rule, loading: true, results: null });
+    try {
+      const r = await fetch("/api/rules/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId: rule.id }),
+      });
+      const d = await r.json();
+      setTestModal({ rule, loading: false, results: d });
+    } catch {
+      setTestModal(prev => ({ ...prev, loading: false, results: { error: "Erreur de connexion" } }));
+    }
   }
 
   async function saveSettings() {
@@ -575,14 +612,14 @@ export default function DashboardClient({ initialConfig }) {
                     </div>
                   </Panel>
                 )}
-                <Panel>
+                <Panel style={{ minWidth: 0, overflow: "hidden" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                     <h3 style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".07em" }}>Activité récente</h3>
                     <button onClick={fetchLogs} className="btn btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>
                       <I n="refresh" size={12} /> Actualiser
                     </button>
                   </div>
-                  <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                  <div style={{ maxHeight: 260, overflowY: "auto", overflowX: "hidden" }}>
                     {logs.length === 0
                       ? <p style={{ textAlign: "center", padding: "24px 0", fontSize: 13, color: "var(--text-3)" }}>Aucune activité</p>
                       : logs.slice(0, 10).map(l => <LogRow key={l.id} log={l} />)}
@@ -629,10 +666,11 @@ export default function DashboardClient({ initialConfig }) {
                       display: "flex", alignItems: "stretch",
                       background: "var(--surface)", border: "1px solid var(--border)",
                       borderRadius: 12, overflow: "hidden",
-                      transition: "border-color .2s, box-shadow .2s",
+                      transition: "border-color .2s, box-shadow .2s, opacity .2s",
+                      opacity: rule.enabled ? 1 : 0.65,
                     }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border-hover)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,.18)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border-hover)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,.18)"; e.currentTarget.style.opacity = "1"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.opacity = rule.enabled ? "1" : "0.65"; }}
                     >
                       {/* Priority controls */}
                       <div style={{
@@ -660,7 +698,22 @@ export default function DashboardClient({ initialConfig }) {
                       {/* Content */}
                       <div style={{ flex: 1, padding: "16px 20px", minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>{rule.name || `Règle ${idx + 1}`}</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: rule.enabled ? "var(--text-1)" : "var(--text-3)" }}>{rule.name || `Règle ${idx + 1}`}</span>
+                          {/* Badge état */}
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            fontSize: 10.5, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
+                            background: rule.enabled ? "rgba(14,165,114,.1)" : "rgba(255,255,255,.05)",
+                            border: `1px solid ${rule.enabled ? "rgba(14,165,114,.25)" : "var(--border)"}`,
+                            color: rule.enabled ? "#34d399" : "var(--text-3)",
+                          }}>
+                            <span style={{
+                              width: 5, height: 5, borderRadius: "50%",
+                              background: rule.enabled ? "#0ea572" : "var(--text-3)",
+                              animation: rule.enabled ? "pulseDot 2s ease-in-out infinite" : "none",
+                            }} />
+                            {rule.enabled ? "Active" : "Inactive"}
+                          </span>
                           {rule.platforms?.length > 0 && (
                             <span className="badge badge-yellow">{rule.platforms.join(" / ")}</span>
                           )}
@@ -670,6 +723,24 @@ export default function DashboardClient({ initialConfig }) {
                             ? rule.extensions.map(e => <span key={e} className="badge badge-blue">{e}</span>)
                             : <span className="badge badge-gray">Tous les fichiers</span>}
                         </div>
+                        {/* Dossiers sources restreints */}
+                        {rule.sourceFolders?.length > 0 && (
+                          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 5, marginBottom: 8 }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            {rule.sourceFolders.map(f => (
+                              <span key={f} style={{
+                                fontSize: 10.5, padding: "2px 7px", borderRadius: 99, fontFamily: "monospace",
+                                background: "rgba(217,119,6,.1)", color: "#fbbf24", border: "1px solid rgba(217,119,6,.25)",
+                                maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "inline-block",
+                              }} title={f}>
+                                {f.split("/").pop() || f}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
                         {rule.filters?.length > 0 && (
                           <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 8 }}>
                             {rule.filters.map((f, i) => (
@@ -721,6 +792,32 @@ export default function DashboardClient({ initialConfig }) {
 
                       {/* Actions */}
                       <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "14px", justifyContent: "center", flexShrink: 0 }}>
+                        {/* Toggle enabled */}
+                        <button
+                          onClick={() => setToggleModal({ rule, newEnabled: !rule.enabled })}
+                          title={rule.enabled ? "Désactiver" : "Activer"}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 6,
+                            padding: "7px 10px", borderRadius: 8, cursor: "pointer",
+                            fontSize: 11.5, fontWeight: 600, border: "1px solid",
+                            transition: "all .15s",
+                            background: rule.enabled ? "rgba(14,165,114,.1)" : "rgba(255,255,255,.04)",
+                            borderColor: rule.enabled ? "rgba(14,165,114,.3)" : "var(--border)",
+                            color: rule.enabled ? "#34d399" : "var(--text-3)",
+                          }}
+                        >
+                          <I n={rule.enabled ? "stop" : "play"} size={11} />
+                          {rule.enabled ? "Activée" : "Désactivée"}
+                        </button>
+                        {/* Test */}
+                        <button
+                          onClick={() => runTest(rule)}
+                          title="Tester la règle (simulation)"
+                          className="btn btn-secondary"
+                          style={{ padding: "7px 10px", fontSize: 12, justifyContent: "center" }}
+                        >
+                          <I n="zap" size={12} /> Tester
+                        </button>
                         <button onClick={() => { setEditingRule(rule); setRuleModalOpen(true); }} className="btn btn-secondary" style={{ padding: "7px 14px", fontSize: 12 }}>
                           <I n="edit" size={12} /> Modifier
                         </button>
@@ -1030,12 +1127,219 @@ export default function DashboardClient({ initialConfig }) {
         </div>
       )}
 
+      {/* ══ MODAL TOGGLE CONFIRM ═══════════════════════════════════ */}
+      {toggleModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(0,0,0,.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+        }}>
+          <div className="animate-scale-in" style={{
+            width: "min(420px, 92vw)",
+            background: "rgba(10,14,23,.98)", border: "1px solid var(--border)",
+            borderRadius: 16, padding: "28px 28px 24px",
+            boxShadow: "0 40px 80px rgba(0,0,0,.6)",
+          }}>
+            {/* Icon */}
+            <div style={{
+              width: 52, height: 52, borderRadius: 14, margin: "0 auto 18px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: toggleModal.newEnabled ? "rgba(14,165,114,.12)" : "rgba(217,119,6,.12)",
+              border: `1px solid ${toggleModal.newEnabled ? "rgba(14,165,114,.25)" : "rgba(217,119,6,.25)"}`,
+            }}>
+              <I n={toggleModal.newEnabled ? "play" : "stop"} size={22}
+                color={toggleModal.newEnabled ? "#34d399" : "#fbbf24"} />
+            </div>
+            <h3 style={{ textAlign: "center", fontSize: 16, fontWeight: 700, color: "var(--text-1)", marginBottom: 8 }}>
+              {toggleModal.newEnabled ? "Activer la règle ?" : "Désactiver la règle ?"}
+            </h3>
+            <p style={{ textAlign: "center", fontSize: 13, color: "var(--text-3)", marginBottom: 4 }}>
+              <strong style={{ color: "var(--text-2)" }}>&ldquo;{toggleModal.rule.name}&rdquo;</strong>
+            </p>
+            <p style={{ textAlign: "center", fontSize: 12.5, color: "var(--text-3)", marginBottom: 24, lineHeight: 1.55 }}>
+              {toggleModal.newEnabled
+                ? "Les fichiers correspondants seront traités par cette règle lors du prochain scan."
+                : "Cette règle sera ignorée lors du traitement des fichiers."}
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setToggleModal(null)}
+                className="btn btn-secondary" style={{ flex: 1, justifyContent: "center" }}>
+                Annuler
+              </button>
+              <button onClick={confirmToggle}
+                className="btn btn-primary" style={{ flex: 1, justifyContent: "center",
+                  background: toggleModal.newEnabled ? undefined : "rgba(217,119,6,.15)",
+                  borderColor: toggleModal.newEnabled ? undefined : "rgba(217,119,6,.4)",
+                  color: toggleModal.newEnabled ? undefined : "#fbbf24",
+                }}>
+                <I n={toggleModal.newEnabled ? "check" : "stop"} size={13} />
+                {toggleModal.newEnabled ? "Activer" : "Désactiver"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ MODAL TEST RÉSULTATS ════════════════════════════════════ */}
+      {testModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(0,0,0,.6)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+        }}>
+          <div className="animate-scale-in" style={{
+            width: "min(680px, 94vw)", maxHeight: "85vh",
+            display: "flex", flexDirection: "column",
+            background: "rgba(10,14,23,.98)", border: "1px solid var(--border)",
+            borderRadius: 16, overflow: "hidden",
+            boxShadow: "0 40px 80px rgba(0,0,0,.6)",
+          }}>
+            {/* Header */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "18px 22px", borderBottom: "1px solid var(--border)",
+              flexShrink: 0,
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                background: "rgba(91,95,203,.12)", border: "1px solid rgba(91,95,203,.25)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <I n="zap" size={18} color="var(--primary-light)" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", marginBottom: 2 }}>
+                  Test de la règle
+                </h3>
+                <p style={{ fontSize: 12, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {testModal.rule.name}
+                </p>
+              </div>
+              <button onClick={() => setTestModal(null)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 6 }}>
+                <I n="x" size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "18px 22px" }}>
+              {testModal.loading ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 0", gap: 14 }}>
+                  <Spin size={28} />
+                  <p style={{ fontSize: 13, color: "var(--text-3)" }}>Scan des dossiers en cours…</p>
+                </div>
+              ) : testModal.results?.error ? (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderRadius: 10,
+                  background: "rgba(232,71,95,.07)", border: "1px solid rgba(232,71,95,.2)",
+                }}>
+                  <I n="x" size={14} color="#f87171" />
+                  <p style={{ fontSize: 13, color: "#f87171" }}>{testModal.results.error}</p>
+                </div>
+              ) : (
+                <>
+                  {/* Stats */}
+                  <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+                    <div style={{
+                      flex: 1, padding: "12px 16px", borderRadius: 10,
+                      background: "var(--bg-2)", border: "1px solid var(--border)", textAlign: "center",
+                    }}>
+                      <p style={{ fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>{testModal.results.scanned ?? 0}</p>
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Fichiers scannés</p>
+                    </div>
+                    <div style={{
+                      flex: 1, padding: "12px 16px", borderRadius: 10, textAlign: "center",
+                      background: testModal.results.matches?.length ? "rgba(14,165,114,.07)" : "var(--bg-2)",
+                      border: `1px solid ${testModal.results.matches?.length ? "rgba(14,165,114,.25)" : "var(--border)"}`,
+                    }}>
+                      <p style={{ fontSize: 22, fontWeight: 800, color: testModal.results.matches?.length ? "#34d399" : "var(--text-3)" }}>
+                        {testModal.results.matches?.length ?? 0}
+                      </p>
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Correspondances</p>
+                    </div>
+                  </div>
+
+                  {testModal.results.matches?.length === 0 ? (
+                    <div style={{
+                      textAlign: "center", padding: "36px 24px",
+                      background: "var(--bg-2)", borderRadius: 10, border: "1px solid var(--border)",
+                    }}>
+                      <I n="folder" size={28} color="var(--text-3)" style={{ marginBottom: 10 }} />
+                      <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 6 }}>Aucune correspondance</p>
+                      <p style={{ fontSize: 12.5, color: "var(--text-3)" }}>
+                        Aucun fichier dans les dossiers surveillés ne correspond aux critères de cette règle.
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>
+                        Fichiers qui seraient traités
+                      </p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {testModal.results.matches.map((m, i) => (
+                          <div key={i} style={{
+                            padding: "10px 14px", borderRadius: 9,
+                            background: "var(--bg-2)", border: "1px solid var(--border)",
+                          }}>
+                            {/* Fichier source */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6"/>
+                              </svg>
+                              <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {m.file}
+                              </span>
+                            </div>
+                            {/* Flèche destination */}
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: 7, paddingLeft: 2 }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 2, flexShrink: 0 }}>
+                                <polyline points="9 18 15 12 9 6"/>
+                              </svg>
+                              <div style={{ minWidth: 0 }}>
+                                <span style={{ fontSize: 12, fontFamily: "monospace", color: "#34d399", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+                                  {m.finalPath}
+                                </span>
+                                {m.outputName !== m.filename && (
+                                  <span style={{ fontSize: 11, color: "#c084fc", fontFamily: "monospace", marginTop: 1, display: "block" }}>
+                                    ✦ Renommé en : {m.outputName}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10,
+              padding: "14px 22px", borderTop: "1px solid var(--border)", flexShrink: 0,
+            }}>
+              {!testModal.loading && testModal.results && !testModal.results.error && (
+                <p style={{ flex: 1, fontSize: 11.5, color: "var(--text-3)" }}>
+                  Simulation uniquement — aucun fichier n'a été déplacé.
+                </p>
+              )}
+              <button onClick={() => setTestModal(null)} className="btn btn-secondary" style={{ padding: "8px 20px" }}>
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <RuleModal
         open={ruleModalOpen}
         onClose={() => { setRuleModalOpen(false); setEditingRule(null); }}
         onSave={saveRule}
         rule={editingRule}
         totalRules={rules.length}
+        sourceFolders={config.watchFolders || []}
       />
     </div>
   );

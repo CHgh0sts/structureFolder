@@ -82,6 +82,8 @@ export async function createRule(data) {
     data: {
       name: data.name || `Règle ${count + 1}`,
       priority: data.priority ?? count + 1,
+      enabled: false, // désactivée par défaut
+      sourceFolders: data.sourceFolders || [],
       extensions: data.extensions || [],
       filters: data.filters || [],
       destination: data.destination,
@@ -104,6 +106,8 @@ export async function updateAllRules(rules) {
         data: {
           name: r.name,
           priority: r.priority,
+          enabled: r.enabled ?? false,
+          sourceFolders: r.sourceFolders || [],
           extensions: r.extensions,
           filters: r.filters,
           destination: r.destination,
