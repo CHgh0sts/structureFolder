@@ -12,6 +12,7 @@ const CONFIG_FILE = path.join(DATA, "config.json");
 const RULES_FILE = path.join(DATA, "rules.json");
 const LOGS_FILE = path.join(DATA, "logs.json");
 const PROCESSED_FILE = path.join(DATA, "processed.json");
+const PENDING_FILE = path.join(DATA, "pending.json");
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA)) fs.mkdirSync(DATA, { recursive: true });
@@ -41,6 +42,7 @@ export async function getAppConfig() {
     siteName: cfg.siteName ?? "File Organizer",
     watchFolders: cfg.watchFolders ?? [],
     defaultDestination: cfg.defaultDestination ?? "",
+    defaultDestinationEnabled: cfg.defaultDestinationEnabled ?? true,
     recursive: cfg.recursive ?? false,
     excludedFolders: cfg.excludedFolders ?? [],
     initialized: cfg.initialized ?? false,
@@ -203,4 +205,40 @@ export async function getProcessedFilesCount() {
 
 export async function clearProcessedFiles() {
   writeJson(PROCESSED_FILE, []);
+}
+
+// ─── Pending files (fichiers en attente) ─────────────────────
+
+export async function getPendingFiles() {
+  const list = readJson(PENDING_FILE, []);
+  return list.map((p, i) => ({
+    id: i + 1,
+    path: typeof p === "string" ? p : p.path,
+    createdAt: typeof p === "object" && p.createdAt ? new Date(p.createdAt) : new Date(),
+  }));
+}
+
+export async function getPendingFilesCount() {
+  return readJson(PENDING_FILE, []).length;
+}
+
+export async function addPendingFile(filePath) {
+  const list = readJson(PENDING_FILE, []);
+  const norm = path.normalize(filePath);
+  const existing = list.find((p) => (typeof p === "string" ? p : p.path) === norm);
+  if (!existing) {
+    list.push({ path: norm, createdAt: new Date().toISOString() });
+    writeJson(PENDING_FILE, list);
+  }
+}
+
+export async function removePendingFile(filePath) {
+  const list = readJson(PENDING_FILE, []);
+  const norm = path.normalize(filePath);
+  const filtered = list.filter((p) => (typeof p === "string" ? p : p.path) !== norm);
+  writeJson(PENDING_FILE, filtered);
+}
+
+export async function clearPendingFiles() {
+  writeJson(PENDING_FILE, []);
 }

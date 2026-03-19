@@ -22,6 +22,8 @@ const P = {
   download:  "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
   hdd:       "M22 12H2M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11zM6 16h.01M10 16h.01",
   server:    "M2 2h20v8H2zM2 14h20v8H2zM6 6h.01M6 18h.01",
+  usb:       "M12 22v-6M9 19l3 3 3-3M6 12V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6M6 12h12M6 12l-2 4h16l-2-4",
+  disc:      "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
   chevR:     "M9 18l6-6-6-6",
   chevL:     "M15 18l-6-6 6-6",
   arrowUp:   "M12 19V5M5 12l7-7 7 7",
@@ -70,7 +72,13 @@ function FolderMed({ selected }) {
 }
 
 /* ─── Sidebar icon mapping ────────────────────────────────────── */
-function sidebarIcon(name) {
+function sidebarIcon(name, type) {
+  // Windows drive types
+  if (type === "network") return P.server;
+  if (type === "removable") return P.usb;
+  if (type === "cdrom") return P.disc;
+  if (type === "local") return P.hdd;
+  // Folder names
   if (/maison|home|~/i.test(name)) return P.home;
   if (/bureau|desktop/i.test(name)) return P.desktop;
   if (/documents?/i.test(name)) return P.docs;
@@ -79,7 +87,7 @@ function sidebarIcon(name) {
   if (/music|musique/i.test(name)) return P.music;
   if (/pictures?|photos?|images?/i.test(name)) return P.pictures;
   if (/movies?|vid[eé]os?/i.test(name)) return P.movies;
-  return P.server;
+  return P.hdd;
 }
 
 /* ─── Grid item (extracted to avoid hooks-in-map) ───────────── */
@@ -442,7 +450,7 @@ export default function FolderBrowser({ value, onChange, placeholder }) {
                     onMouseEnter={e => { if (!isCurrent) { e.currentTarget.style.background = "rgba(255,255,255,.05)"; e.currentTarget.style.color = "var(--text-1)"; } }}
                     onMouseLeave={e => { if (!isCurrent) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-2)"; } }}
                   >
-                    <Ico d={sidebarIcon(r.name)} size={14} style={{ flexShrink: 0 }} />
+                    <Ico d={sidebarIcon(r.name, r.type)} size={14} style={{ flexShrink: 0 }} />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
                   </button>
                 );

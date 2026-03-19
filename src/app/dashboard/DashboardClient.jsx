@@ -167,10 +167,12 @@ export default function DashboardClient({ initialConfig }) {
 
   const [settingsForm, setSettingsForm] = useState({
     defaultDestination: initialConfig.defaultDestination || "",
+    defaultDestinationEnabled: initialConfig.defaultDestinationEnabled ?? true,
     watchFolders: initialConfig.watchFolders || [],
     recursive: initialConfig.recursive ?? false,
     excludedFolders: initialConfig.excludedFolders ?? [],
   });
+  const [pendingFilesCount, setPendingFilesCount] = useState(initialConfig.pendingFilesCount ?? 0);
 
   // Modal de confirmation pour toggle activer/désactiver
   const [toggleModal, setToggleModal] = useState(null); // { rule, newEnabled }
@@ -293,6 +295,7 @@ export default function DashboardClient({ initialConfig }) {
       body: JSON.stringify({
         watchFolders: validFolders,
         defaultDestination: settingsForm.defaultDestination,
+        defaultDestinationEnabled: settingsForm.defaultDestinationEnabled,
         recursive: settingsForm.recursive,
         excludedFolders: settingsForm.excludedFolders.filter(Boolean),
       }),
@@ -300,8 +303,10 @@ export default function DashboardClient({ initialConfig }) {
     if (r.ok) {
       const d = await r.json();
       setConfig(d.config);
+      setPendingFilesCount(d.config.pendingFilesCount ?? 0);
       setSettingsForm(f => ({
         ...f,
+        defaultDestinationEnabled: d.config.defaultDestinationEnabled ?? true,
         recursive: d.config.recursive ?? false,
         excludedFolders: d.config.excludedFolders ?? [],
       }));
@@ -834,20 +839,41 @@ export default function DashboardClient({ initialConfig }) {
               <div style={{
                 display: "flex", alignItems: "center", gap: 14, marginTop: 16,
                 padding: "14px 18px", borderRadius: 10,
-                background: "rgba(217,119,6,.07)", border: "1px solid rgba(217,119,6,.2)",
+                background: config.defaultDestinationEnabled ? "rgba(217,119,6,.07)" : "rgba(91,95,203,.07)",
+                border: `1px solid ${config.defaultDestinationEnabled ? "rgba(217,119,6,.2)" : "rgba(91,95,203,.2)"}`,
               }}>
                 <div style={{
                   width: 36, height: 36, borderRadius: 9, flexShrink: 0,
-                  background: "rgba(217,119,6,.12)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--amber)",
+                  background: config.defaultDestinationEnabled ? "rgba(217,119,6,.12)" : "rgba(91,95,203,.12)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: config.defaultDestinationEnabled ? "var(--amber)" : "var(--primary-light)",
                 }}>
-                  <I n="folder" size={16} />
+                  <I n={config.defaultDestinationEnabled ? "folder" : "info"} size={16} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--amber)", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 3 }}>Destination par défaut</p>
-                  <p style={{ fontSize: 13, fontFamily: "monospace", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {config.defaultDestination || "Non configuré"}
+                  <p style={{
+                    fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 3,
+                    color: config.defaultDestinationEnabled ? "var(--amber)" : "var(--primary-light)",
+                  }}>
+                    {config.defaultDestinationEnabled ? "Destination par défaut" : "Mode fichiers en attente"}
                   </p>
-                  <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Appliquée si aucune règle ne correspond</p>
+                  {config.defaultDestinationEnabled ? (
+                    <>
+                      <p style={{ fontSize: 13, fontFamily: "monospace", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {config.defaultDestination || "Non configuré"}
+                      </p>
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Appliquée si aucune règle ne correspond</p>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: 13, color: "var(--text-2)" }}>
+                        {pendingFilesCount} fichier(s) en attente
+                      </p>
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
+                        Les fichiers sans règle ne sont pas déplacés — retraités à chaque nouvelle règle
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -997,13 +1023,47 @@ export default function DashboardClient({ initialConfig }) {
                 </Panel>
 
                 <Panel>
-                  <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 5, color: "var(--text-1)" }}>Destination par défaut</h3>
-                  <p style={{ fontSize: 12.5, color: "var(--text-3)", marginBottom: 18, lineHeight: 1.55 }}>
-                    Les fichiers ne correspondant à aucune règle seront déplacés dans ce dossier.
-                  </p>
-                  <FolderBrowser value={settingsForm.defaultDestination}
-                    onChange={v => setSettingsForm({ ...settingsForm, defaultDestination: v })}
-                    placeholder="/chemin/destination" />
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 18 }}>
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 5, color: "var(--text-1)" }}>Destination par défaut</h3>
+                      <p style={{ fontSize: 12.5, color: "var(--text-3)", lineHeight: 1.55 }}>
+                        {settingsForm.defaultDestinationEnabled
+                          ? "Les fichiers ne correspondant à aucune règle seront déplacés dans ce dossier."
+                          : "Mode désactivé — les fichiers sans règle sont mis en attente."}
+                      </p>
+                    </div>
+                    <Toggle
+                      value={settingsForm.defaultDestinationEnabled}
+                      onChange={v => setSettingsForm(f => ({ ...f, defaultDestinationEnabled: v }))}
+                    />
+                  </div>
+
+                  {settingsForm.defaultDestinationEnabled ? (
+                    <FolderBrowser value={settingsForm.defaultDestination}
+                      onChange={v => setSettingsForm({ ...settingsForm, defaultDestination: v })}
+                      placeholder="/chemin/destination" />
+                  ) : (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 14,
+                      padding: "14px 18px", borderRadius: 10,
+                      background: "rgba(217,119,6,.07)", border: "1px solid rgba(217,119,6,.2)",
+                    }}>
+                      <div style={{
+                        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                        background: "rgba(217,119,6,.12)", display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <I n="info" size={18} color="var(--amber)" />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--amber)", marginBottom: 3 }}>
+                          {pendingFilesCount} fichier(s) en attente
+                        </p>
+                        <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.45 }}>
+                          Ces fichiers seront retraités automatiquement lors de l'ajout ou la modification d'une règle.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </Panel>
 
                 {/* Scan récursif */}
@@ -1086,7 +1146,7 @@ export default function DashboardClient({ initialConfig }) {
                   <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 5, color: "var(--text-1)" }}>Démarrage automatique</h3>
                   <p style={{ fontSize: 12.5, color: "var(--text-3)", marginBottom: 18, lineHeight: 1.55 }}>
                     Lance File Organizer au démarrage du PC sans console visible.
-                    Une notification système s'affichera si le port 8080 est occupé.
+                    Une notification système s'affichera si le port 1830 est occupé.
                   </p>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
                     <button onClick={() => triggerStartup("enable")} disabled={loading.startup} className="btn btn-primary" style={{ fontSize: 13 }}>

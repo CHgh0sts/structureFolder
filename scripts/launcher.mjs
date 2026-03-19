@@ -2,8 +2,8 @@
 /**
  * Launcher intelligent pour File Organizer.
  *
- * - Démarre sur le port 8080 par défaut
- * - Si le port est occupé, tente 8081, 8082... jusqu'à 8099
+ * - Démarre sur le port 1830 par défaut
+ * - Si le port est occupé, tente 1831, 1832... jusqu'à 1839
  * - En mode console (npm run dev/start) : log dans le terminal
  * - En mode background (--notify) : envoie une notification système si le port a changé
  *
@@ -27,8 +27,8 @@ const DATA_DIR   = path.join(PROJECT_DIR, "data");
 const PORT_FILE  = path.join(DATA_DIR, "app.port");
 const LOG_FILE   = path.join(DATA_DIR, "launcher.log");
 
-const DEFAULT_PORT = 8080;
-const MAX_PORT     = 8099;
+const DEFAULT_PORT = 1830;
+const MAX_PORT     = 1839;
 
 const rawArgs    = process.argv.slice(2);
 const mode       = rawArgs.find(a => !a.startsWith("-")) ?? "start"; // dev | start

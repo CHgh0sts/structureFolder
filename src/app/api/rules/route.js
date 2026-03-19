@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRules, createRule, updateRule, updateAllRules, deleteRule } from "@/lib/config";
 import { getSession } from "@/lib/auth";
+import { reprocessPendingFiles } from "@/lib/watcher";
 
 export async function GET() {
   const session = await getSession();
@@ -25,6 +26,8 @@ export async function POST(request) {
 
   try {
     const rule = await createRule(body);
+    // Retraiter les fichiers en attente après création d'une règle
+    reprocessPendingFiles().catch(() => {});
     return NextResponse.json({ success: true, rule });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -45,6 +48,8 @@ export async function PUT(request) {
   try {
     await updateAllRules(rules);
     const updated = await getRules();
+    // Retraiter les fichiers en attente après modification de règles
+    reprocessPendingFiles().catch(() => {});
     return NextResponse.json({ success: true, rules: updated });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -64,6 +69,10 @@ export async function PATCH(request) {
 
   try {
     const updated = await updateRule(id, { enabled });
+    // Retraiter les fichiers en attente si une règle est activée
+    if (enabled) {
+      reprocessPendingFiles().catch(() => {});
+    }
     return NextResponse.json({ success: true, rule: updated });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });

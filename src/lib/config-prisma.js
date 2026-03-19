@@ -186,3 +186,33 @@ export async function getProcessedFilesCount() {
 export async function clearProcessedFiles() {
   return prisma.processedFile.deleteMany();
 }
+
+// ─── Pending files (fichiers en attente) ─────────────────────
+
+export async function getPendingFiles() {
+  return prisma.pendingFile.findMany({ orderBy: { createdAt: "asc" } });
+}
+
+export async function getPendingFilesCount() {
+  return prisma.pendingFile.count();
+}
+
+export async function addPendingFile(filePath) {
+  return prisma.pendingFile.upsert({
+    where: { path: filePath },
+    update: {},
+    create: { path: filePath },
+  });
+}
+
+export async function removePendingFile(filePath) {
+  try {
+    await prisma.pendingFile.delete({ where: { path: filePath } });
+  } catch {
+    // Ignore si non trouvé
+  }
+}
+
+export async function clearPendingFiles() {
+  return prisma.pendingFile.deleteMany();
+}

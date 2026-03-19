@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { isInitialized, getAppConfig, initializeApp, updateAppConfig, updateUserPassword } from "@/lib/config";
+import { isInitialized, getAppConfig, initializeApp, updateAppConfig, updateUserPassword, getPendingFilesCount } from "@/lib/config";
 import { getSession } from "@/lib/auth";
 
 export async function GET() {
@@ -14,7 +14,10 @@ export async function GET() {
     return NextResponse.json({ initialized: true, authenticated: false });
   }
 
-  const config = await getAppConfig();
+  const [config, pendingFilesCount] = await Promise.all([
+    getAppConfig(),
+    getPendingFilesCount(),
+  ]);
   return NextResponse.json({
     initialized: true,
     authenticated: true,
@@ -22,6 +25,10 @@ export async function GET() {
       siteName: config.siteName,
       watchFolders: config.watchFolders,
       defaultDestination: config.defaultDestination,
+      defaultDestinationEnabled: config.defaultDestinationEnabled ?? true,
+      recursive: config.recursive ?? false,
+      excludedFolders: config.excludedFolders ?? [],
+      pendingFilesCount,
       adminUsername: session.username,
     },
   });
@@ -69,11 +76,12 @@ export async function PATCH(request) {
   }
 
   const body = await request.json();
-  const { watchFolders, defaultDestination, siteName, newPassword, recursive, excludedFolders } = body;
+  const { watchFolders, defaultDestination, defaultDestinationEnabled, siteName, newPassword, recursive, excludedFolders } = body;
 
   const updates = {};
   if (watchFolders) updates.watchFolders = watchFolders.filter(Boolean);
   if (defaultDestination) updates.defaultDestination = defaultDestination;
+  if (defaultDestinationEnabled !== undefined) updates.defaultDestinationEnabled = defaultDestinationEnabled;
   if (siteName) updates.siteName = siteName;
   if (recursive !== undefined) updates.recursive = recursive;
   if (excludedFolders !== undefined) updates.excludedFolders = excludedFolders.filter(Boolean);
@@ -86,14 +94,18 @@ export async function PATCH(request) {
       await updateUserPassword(session.username, hashed);
     }
 
+    const pendingFilesCount = await getPendingFilesCount();
+
     return NextResponse.json({
       success: true,
       config: {
         siteName: config.siteName,
         watchFolders: config.watchFolders,
         defaultDestination: config.defaultDestination,
+        defaultDestinationEnabled: config.defaultDestinationEnabled ?? true,
         recursive: config.recursive ?? false,
         excludedFolders: config.excludedFolders ?? [],
+        pendingFilesCount,
         adminUsername: session.username,
       },
     });

@@ -81,3 +81,18 @@ export async function getProcessedFilesCount() {
 export async function clearProcessedFiles() {
   return (await backend()).clearProcessedFiles();
 }
+export async function getPendingFiles() {
+  return (await backend()).getPendingFiles();
+}
+export async function getPendingFilesCount() {
+  return (await backend()).getPendingFilesCount();
+}
+export async function addPendingFile(filePath) {
+  return (await backend()).addPendingFile(filePath);
+}
+export async function removePendingFile(filePath) {
+  return (await backend()).removePendingFile(filePath);
+}
+export async function clearPendingFiles() {
+  return (await backend()).clearPendingFiles();
+}

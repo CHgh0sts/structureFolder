@@ -1,6 +1,6 @@
 import path from "path";
 import fs from "fs";
-import { appendLog } from "./config.js";
+import { appendLog, addPendingFile } from "./config.js";
 
 /* ─── Template helpers ──────────────────────────────────────── */
 
@@ -76,6 +76,14 @@ export function buildVars(filePath, rule) {
       if (v !== undefined && String(v).trim() !== "") withDefaults[k] = v;
     }
 
+    // Appliquer les modificateurs de casse (minuscule / majuscule)
+    const mods = p.variableModifiers || {};
+    for (const [k, v] of Object.entries(withDefaults)) {
+      const mod = mods[k];
+      if (mod === "lower") withDefaults[k] = String(v).toLowerCase();
+      else if (mod === "upper") withDefaults[k] = String(v).toUpperCase();
+    }
+
     return { ...acc, ...withDefaults };
   }, {});
 
@@ -138,7 +146,21 @@ export function findMatchingRule(filePath, rules, { ignoreEnabled = false } = {}
   if (!rules?.length) return null;
   const active = ignoreEnabled ? rules : rules.filter(r => r.enabled !== false);
   const sorted = [...active].sort((a, b) => (a.priority || 99) - (b.priority || 99));
-  return sorted.find(r => matchesRule(filePath, r)) ?? null;
+  return sorted.find(r => {
+    if (!matchesRule(filePath, r)) return false;
+    const vars = buildVars(filePath, r);
+    const patterns = r.capturePatterns
+      ? (Array.isArray(r.capturePatterns) ? r.capturePatterns : (() => { try { return JSON.parse(r.capturePatterns); } catch { return []; } })())
+      : [];
+    for (const p of patterns) {
+      const required = p.requiredVariables || [];
+      for (const v of required) {
+        const val = vars[v];
+        if (!val || String(val).trim() === "") return false;
+      }
+    }
+    return true;
+  }) ?? null;
 }
 
 /* ─── File processing ───────────────────────────────────────── */
@@ -150,8 +172,14 @@ export function findMatchingRule(filePath, rules, { ignoreEnabled = false } = {}
  *  3. Résout le chemin de destination (template)
  *  4. Optionnellement renomme le fichier (renameTemplate)
  *  5. Déplace le fichier
+ *
+ * @param {string} filePath
+ * @param {Array} rules
+ * @param {string} defaultDestination
+ * @param {Object} options
+ * @param {boolean} [options.defaultDestinationEnabled=true] - Si false et pas de règle, le fichier est mis en attente
  */
-export async function processFile(filePath, rules, defaultDestination) {
+export async function processFile(filePath, rules, defaultDestination, options = {}) {
   const normalizedPath = path.normalize(filePath);
 
   if (!fs.existsSync(normalizedPath)) {
@@ -168,6 +196,13 @@ export async function processFile(filePath, rules, defaultDestination) {
 
   // ── Destination (template ou statique) ───────────────────
   const rawDest = matchedRule ? matchedRule.destination : defaultDestination;
+
+  // Si pas de règle correspondante et destination par défaut désactivée → mise en attente
+  if (!matchedRule && options.defaultDestinationEnabled === false) {
+    await addPendingFile(normalizedPath);
+    return { success: false, reason: "pending", pending: true };
+  }
+
   if (!rawDest) {
     await appendLog({ type: "warning", file: normalizedPath, message: "Aucune destination trouvée pour ce fichier" });
     return { success: false, reason: "no_destination" };

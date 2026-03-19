@@ -53,6 +53,18 @@ function extractVars(text, regexStr) {
   } catch { return {}; }
 }
 
+/** Extrait les noms des groupes nommés d'une regex : (?<name>...) */
+function extractNamedGroups(regexStr) {
+  if (!regexStr?.trim()) return [];
+  const names = [];
+  const re = /\(\?<(\w+)>/g;
+  let m;
+  while ((m = re.exec(regexStr)) !== null) {
+    if (!names.includes(m[1])) names.push(m[1]);
+  }
+  return names;
+}
+
 function applyTemplate(tpl, vars) {
   return tpl.replace(/\{(\w+)(?::([^}]+))?\}/g, (match, name, mod) => {
     const raw = vars[name];
@@ -151,7 +163,7 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
   /* ── Capture pattern handlers ─────────────────────────────── */
   function addPattern() {
     const id = `cp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setForm(f => ({ ...f, capturePatterns: [...f.capturePatterns, { id, source: "filename", regex: "" }] }));
+    setForm(f => ({ ...f, capturePatterns: [...f.capturePatterns, { id, source: "filename", regex: "", requiredVariables: [] }] }));
   }
 
   function updatePattern(id, key, val) {
@@ -200,6 +212,32 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
     }));
   }
 
+  function toggleRequiredVar(patternId, varName) {
+    setForm(f => ({
+      ...f,
+      capturePatterns: f.capturePatterns.map(p => {
+        if (p.id !== patternId) return p;
+        const arr = p.requiredVariables || [];
+        const idx = arr.indexOf(varName);
+        const next = idx >= 0 ? arr.filter((_, i) => i !== idx) : [...arr, varName];
+        return { ...p, requiredVariables: next };
+      }),
+    }));
+  }
+
+  function updateVariableModifier(patternId, varName, value) {
+    setForm(f => ({
+      ...f,
+      capturePatterns: f.capturePatterns.map(p => {
+        if (p.id !== patternId) return p;
+        const mods = { ...(p.variableModifiers || {}) };
+        if (value === "none" || !value) delete mods[varName];
+        else mods[varName] = value;
+        return { ...p, variableModifiers: mods };
+      }),
+    }));
+  }
+
   /* ── Live preview computation ─────────────────────────────── */
   const preview = useMemo(() => {
     const basename = testFile;
@@ -218,6 +256,13 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
       for (const [k, v] of Object.entries(extracted)) {
         if (v !== undefined && String(v).trim() !== "") withDefaults[k] = v;
       }
+      // Appliquer les modificateurs de casse
+      const mods = p.variableModifiers || {};
+      for (const [k, v] of Object.entries(withDefaults)) {
+        const mod = mods[k];
+        if (mod === "lower") withDefaults[k] = String(v).toLowerCase();
+        else if (mod === "upper") withDefaults[k] = String(v).toUpperCase();
+      }
       return { ...acc, ...withDefaults };
     }, {});
 
@@ -225,17 +270,25 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
     const resolvedDest  = form.destination ? applyTemplate(form.destination, allVars) : "";
     const resolvedName  = form.renameTemplate ? applyTemplate(form.renameTemplate, allVars) : basename;
     const hasUnresolved = form.destination && resolvedDest.includes("{") && resolvedDest.includes("}");
+    const requiredEmpty = form.capturePatterns.some(p => {
+      const req = p.requiredVariables || [];
+      return req.some(v => !allVars[v] || String(allVars[v]).trim() === "");
+    });
 
-    return { builtins, captureVars, allVars, resolvedDest, resolvedName, hasUnresolved };
+    return { builtins, captureVars, allVars, resolvedDest, resolvedName, hasUnresolved, requiredEmpty };
   }, [testFile, form.capturePatterns, form.destination, form.renameTemplate]);
 
   /* ── Save ─────────────────────────────────────────────────── */
   function handleSave() {
     if (!form.destination) return;
+    const patterns = form.capturePatterns.map(p => ({
+      ...p,
+      requiredVariables: (p.requiredVariables || []).filter(v => v && String(v).trim()),
+    }));
     onSave({
       ...form,
       renameTemplate: form.renameTemplate || null,
-      capturePatterns: form.capturePatterns,
+      capturePatterns: patterns,
     });
     onClose();
   }
@@ -386,7 +439,7 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
                       </button>
                     </div>
                     <input type="text" value={p.regex} onChange={e => updatePattern(p.id, "regex", e.target.value)}
-                      className="input" placeholder="(?<animeName>[^-]+?) - (?<saison>\d+)x(?<episode>\d+)"
+                      className="input" placeholder="(?<animeName>.+) - (?<episode>\d+) (?<lang>\S+?)(?:\.\w+)?$"
                       style={{ fontFamily: "monospace", fontSize: 12.5, background: "rgba(0,0,0,.2)" }} />
                     {regexErrors[p.id] && (
                       <p style={{ fontSize: 11.5, color: "#f87171", marginTop: 5, display: "flex", alignItems: "center", gap: 4 }}>
@@ -441,6 +494,50 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
                           ))}
                         </div>
                       )}
+                    </div>
+
+                    {/* Variables détectées + obligatoire ou non */}
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(139,92,246,.15)" }}>
+                      <p style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-3)", marginBottom: 8 }}>
+                        Variables détectées <span style={{ fontWeight: 400 }}>(cocher si obligatoire — si vide, la règle ne s&apos;applique pas)</span>
+                      </p>
+                      {(() => {
+                        const detected = extractNamedGroups(p.regex);
+                        const required = new Set(p.requiredVariables || []);
+                        if (detected.length === 0) {
+                          return <p style={{ fontSize: 11.5, color: "var(--text-3)", fontStyle: "italic" }}>Aucune variable — utilisez des groupes nommés <code style={{ color: "#c084fc" }}>(?&lt;nom&gt;...)</code> dans votre regex</p>;
+                        }
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {detected.map((varName) => (
+                              <div key={varName} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={required.has(varName)}
+                                    onChange={() => toggleRequiredVar(p.id, varName)}
+                                    style={{ width: 16, height: 16, accentColor: "#f87171" }}
+                                  />
+                                  <span style={{ fontFamily: "monospace", color: "#c084fc", background: "rgba(139,92,246,.15)", padding: "2px 8px", borderRadius: 4 }}>{`{${varName}}`}</span>
+                                  <span style={{ color: "var(--text-3)" }}>
+                                    {required.has(varName) ? "obligatoire" : "optionnel"}
+                                  </span>
+                                </label>
+                                <select
+                                  value={(p.variableModifiers || {})[varName] || "none"}
+                                  onChange={e => updateVariableModifier(p.id, varName, e.target.value)}
+                                  className="input"
+                                  style={{ padding: "4px 8px", fontSize: 11, width: "auto", minWidth: 110, cursor: "pointer" }}
+                                >
+                                  <option value="none">Aucune casse</option>
+                                  <option value="lower">Minuscule</option>
+                                  <option value="upper">Majuscule</option>
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))}
@@ -524,6 +621,19 @@ export default function RuleModal({ open, onClose, onSave, rule = null, totalRul
 
               {/* Résultats */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {preview.requiredEmpty && (
+                  <div style={{
+                    padding: "10px 14px", borderRadius: 8,
+                    background: "rgba(244,63,94,.07)", border: "1px solid rgba(244,63,94,.25)",
+                  }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "#f87171", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".06em", display: "flex", alignItems: "center", gap: 6 }}>
+                      <I d={IC.warn} size={12} /> Variable obligatoire vide — la règle ne s&apos;appliquera pas
+                    </p>
+                    <p style={{ fontSize: 11.5, color: "var(--text-3)" }}>
+                      Un fichier avec ce nom ne correspondra pas à cette règle.
+                    </p>
+                  </div>
+                )}
                 {form.destination && (
                   <div style={{
                     padding: "10px 14px", borderRadius: 8,

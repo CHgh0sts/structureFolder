@@ -21,15 +21,16 @@ model User {
 
 // ─── Configuration globale de l'application ──────────────────
 model AppConfig {
-  id                 Int      @id @default(autoincrement())
-  siteName           String   @default("File Organizer")
-  watchFolders       String[] // chemins absolus des dossiers surveillés
-  defaultDestination String
-  recursive          Boolean  @default(false) // traiter les sous-dossiers récursivement
-  excludedFolders    String[] // dossiers à ignorer lors du scan récursif
-  initialized        Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                        Int      @id @default(autoincrement())
+  siteName                  String   @default("File Organizer")
+  watchFolders              String[] // chemins absolus des dossiers surveillés
+  defaultDestination        String
+  defaultDestinationEnabled Boolean  @default(true) // si false, fichiers sans règle → PendingFile
+  recursive                 Boolean  @default(false) // traiter les sous-dossiers récursivement
+  excludedFolders           String[] // dossiers à ignorer lors du scan récursif
+  initialized               Boolean  @default(false)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 
   @@map("app_config")
 }
@@ -73,4 +74,13 @@ model ProcessedFile {
   createdAt DateTime @default(now())
 
   @@map("processed_files")
+}
+
+// ─── Fichiers en attente (sans règle correspondante) ─────────
+model PendingFile {
+  id        Int      @id @default(autoincrement())
+  path      String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("pending_files")
 }

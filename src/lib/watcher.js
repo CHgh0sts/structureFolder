@@ -1,6 +1,6 @@
 import chokidar from "chokidar";
 import path from "path";
-import { getAppConfig, getRules, appendLog, isFileProcessed, markFileProcessed } from "./config.js";
+import { getAppConfig, getRules, appendLog, isFileProcessed, markFileProcessed, getPendingFiles, removePendingFile } from "./config.js";
 import { processFile } from "./rules-engine.js";
 
 let watcherInstance = null;
@@ -67,7 +67,9 @@ export async function startWatcher() {
     const [currentConfig, rules] = await Promise.all([getAppConfig(), getRules()]);
     if (!currentConfig) return;
 
-    const result = await processFile(normalized, rules, currentConfig.defaultDestination);
+    const result = await processFile(normalized, rules, currentConfig.defaultDestination, {
+      defaultDestinationEnabled: currentConfig.defaultDestinationEnabled ?? true,
+    });
 
     if (result.success) {
       await markFileProcessed(normalized);
@@ -148,11 +150,13 @@ async function scanFolderRecursive(folder, rules, config, stats) {
       const already = await isFileProcessed(filePath);
       if (already) continue;
 
-      const result = await processFile(filePath, rules, config.defaultDestination);
+      const result = await processFile(filePath, rules, config.defaultDestination, {
+        defaultDestinationEnabled: config.defaultDestinationEnabled ?? true,
+      });
       if (result.success) {
         await markFileProcessed(filePath);
         stats.processed++;
-      } else if (result.reason !== "already_processed") {
+      } else if (result.reason !== "already_processed" && result.reason !== "pending") {
         stats.errors++;
       }
     }
@@ -172,6 +176,54 @@ export async function processExistingFiles() {
 
   for (const folder of config.watchFolders) {
     await scanFolderRecursive(folder, rules, config, stats);
+  }
+
+  return stats;
+}
+
+/**
+ * Retraite tous les fichiers en attente (PendingFile).
+ * Appelé après ajout/modification d'une règle.
+ * Supprime le fichier de la liste si traité avec succès.
+ */
+export async function reprocessPendingFiles() {
+  const [config, rules, pendingFiles] = await Promise.all([
+    getAppConfig(),
+    getRules(),
+    getPendingFiles(),
+  ]);
+
+  if (!config || !pendingFiles || pendingFiles.length === 0) {
+    return { processed: 0, errors: 0, remaining: 0 };
+  }
+
+  const stats = { processed: 0, errors: 0, remaining: 0 };
+
+  for (const pending of pendingFiles) {
+    const filePath = pending.path;
+
+    const result = await processFile(filePath, rules, config.defaultDestination, {
+      defaultDestinationEnabled: config.defaultDestinationEnabled ?? true,
+    });
+
+    if (result.success) {
+      await removePendingFile(filePath);
+      await markFileProcessed(filePath);
+      stats.processed++;
+    } else if (result.pending) {
+      stats.remaining++;
+    } else if (result.reason === "file_not_found") {
+      await removePendingFile(filePath);
+    } else {
+      stats.errors++;
+    }
+  }
+
+  if (stats.processed > 0) {
+    await appendLog({
+      type: "info",
+      message: `Fichiers en attente retraités : ${stats.processed} traité(s), ${stats.remaining} restant(s)`,
+    });
   }
 
   return stats;

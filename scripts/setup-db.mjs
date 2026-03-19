@@ -45,7 +45,7 @@ try {
 
   console.log("\n✓ Base de données prête !");
   console.log("  Lancez l'application : npm start");
-  console.log("  Puis ouvrez : http://localhost:3000\n");
+  console.log("  Puis ouvrez : http://localhost:1830\n");
 } catch (err) {
   console.error("\n✕ Erreur lors de la configuration de la BDD :");
   console.error("  Vérifiez que PostgreSQL est lancé et que DATABASE_URL est correct.");

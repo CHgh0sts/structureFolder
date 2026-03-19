@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/launcher.mjs dev",
+    "dev": "node scripts/prepare-dev.mjs && node scripts/launcher.mjs dev",
     "build": "node node_modules/next/dist/bin/next build",
     "start": "node scripts/launcher.mjs start",
     "lint": "eslint",

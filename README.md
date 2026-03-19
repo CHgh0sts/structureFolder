@@ -39,7 +39,7 @@ npm run build
 npm start
 ```
 
-Puis ouvrez **http://localhost:3000** dans votre navigateur.
+Puis ouvrez **http://localhost:1830** dans votre navigateur.
 
 ### PostgreSQL en local (rapide avec Docker)
 

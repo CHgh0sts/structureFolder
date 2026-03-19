@@ -25,7 +25,7 @@ console.log(`\n📂 File Organizer — Activation du démarrage automatique`);
 console.log(`   Plateforme  : ${platform}`);
 console.log(`   Dossier     : ${projectDir}`);
 console.log(`   Launcher    : ${launcherBin}`);
-console.log(`   Port défaut : 8080 (suivant disponible si occupé)\n`);
+console.log(`   Port défaut : 1830 (suivant disponible si occupé)\n`);
 
 async function enableStartup() {
   if (platform === "win32")       await enableWindows();
@@ -59,7 +59,7 @@ objShell.Run "${cmd}", 0, False
     console.log(`✓ Tâche planifiée Windows créée : ${taskName}`);
     console.log(`  Script  : ${vbsPath}`);
     console.log(`\n  File Organizer démarrera automatiquement à chaque connexion.`);
-    console.log(`  Port    : 8080 (ou 8081+ si occupé — notification popup automatique)`);
+    console.log(`  Port    : 1830 (ou 1831+ si occupé — notification popup automatique)`);
     console.log(`  Log     : ${path.join(projectDir, "data", "launcher.log")}`);
   } catch (err) {
     console.error("✕ Erreur lors de la création de la tâche planifiée :");
@@ -126,7 +126,7 @@ async function enableMac() {
     console.log(`  Logs système : ${logDir}/stdout.log`);
     console.log(`  Log launcher : ${path.join(projectDir, "data", "launcher.log")}`);
     console.log(`\n  File Organizer démarrera automatiquement à chaque connexion.`);
-    console.log(`  Port    : 8080 (ou 8081+ si occupé — notification macOS automatique)`);
+    console.log(`  Port    : 1830 (ou 1831+ si occupé — notification macOS automatique)`);
   } catch (err) {
     console.error("✕ Erreur lors du chargement du LaunchAgent :");
     console.error(err.message);
@@ -170,7 +170,7 @@ WantedBy=default.target
     console.log(`  Statut : systemctl --user status file-organizer`);
     console.log(`  Log    : ${path.join(projectDir, "data", "launcher.log")}`);
     console.log(`\n  File Organizer démarrera automatiquement à chaque connexion.`);
-    console.log(`  Port   : 8080 (ou 8081+ si occupé — notification desktop automatique)`);
+    console.log(`  Port   : 1830 (ou 1831+ si occupé — notification desktop automatique)`);
   } catch (err) {
     console.log("  systemd user non disponible, tentative XDG autostart...");
     enableLinuxXDG();
@@ -197,7 +197,7 @@ X-GNOME-Autostart-enabled=true
   fs.writeFileSync(desktopPath, desktop, "utf-8");
   console.log(`✓ Entrée autostart XDG créée : ${desktopPath}`);
   console.log(`  Log    : ${path.join(projectDir, "data", "launcher.log")}`);
-  console.log(`  Port   : 8080 (ou 8081+ si occupé — notification notify-send)`);
+  console.log(`  Port   : 1830 (ou 1831+ si occupé — notification notify-send)`);
   console.log(`  File Organizer démarrera au prochain login graphique.`);
 }
 

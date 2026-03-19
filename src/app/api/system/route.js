@@ -2,7 +2,66 @@ import { NextResponse } from "next/server";
 import os from "os";
 import path from "path";
 import fs from "fs";
+import { execSync } from "child_process";
 import { getSession } from "@/lib/auth";
+
+/**
+ * Récupère tous les disques Windows avec leurs noms de volume et types.
+ * DriveType: 2=amovible, 3=local, 4=réseau, 5=CD/DVD, 6=RAM disk
+ * Retourne un tableau de { letter, name, path, type } 
+ */
+function getWindowsDrives() {
+  const drives = [];
+  try {
+    const output = execSync("wmic logicaldisk get Caption,VolumeName,DriveType /format:csv", {
+      encoding: "utf-8",
+      timeout: 5000,
+      windowsHide: true,
+    });
+    const lines = output.trim().split("\n").filter(Boolean);
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(",");
+      if (parts.length >= 4) {
+        const letter = parts[1]?.trim();
+        const driveType = parseInt(parts[2]?.trim() || "0", 10);
+        const volumeName = parts[3]?.trim() || "";
+        if (letter && /^[A-Z]:$/i.test(letter)) {
+          let displayName = volumeName;
+          let typeLabel = "local";
+          if (driveType === 2) {
+            displayName = displayName || "Disque amovible";
+            typeLabel = "removable";
+          } else if (driveType === 3) {
+            displayName = displayName || "Disque local";
+            typeLabel = "local";
+          } else if (driveType === 4) {
+            displayName = displayName || "Lecteur réseau";
+            typeLabel = "network";
+          } else if (driveType === 5) {
+            displayName = displayName || "Lecteur CD/DVD";
+            typeLabel = "cdrom";
+          } else {
+            displayName = displayName || "Disque";
+          }
+          displayName += ` (${letter})`;
+          drives.push({ letter, name: displayName, path: letter + "\\", type: typeLabel });
+        }
+      }
+    }
+  } catch {
+    const fallbackLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    for (const l of fallbackLetters) {
+      const letter = l + ":";
+      try {
+        fs.accessSync(letter + "\\");
+        drives.push({ letter, name: `Disque (${letter})`, path: letter + "\\", type: "local" });
+      } catch {
+        // Disque non accessible
+      }
+    }
+  }
+  return drives;
+}
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -62,10 +121,8 @@ export async function GET(request) {
       // Racines selon l'OS
       let roots = [];
       if (platform === "win32") {
-        const drives = ["C:", "D:", "E:", "F:", "G:", "H:"].filter((d) => {
-          try { fs.accessSync(d + "\\"); return true; } catch { return false; }
-        });
-        roots = drives.map((d) => ({ name: d, path: d + "\\" }));
+        const drives = getWindowsDrives();
+        roots = drives.map((d) => ({ name: d.name, path: d.path, type: d.type }));
       } else if (platform === "darwin") {
         // macOS : raccourcis utiles
         roots = [

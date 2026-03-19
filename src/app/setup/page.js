@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import FolderBrowser from "@/components/FolderBrowser";
 
@@ -262,6 +263,463 @@ function BackBtn({ onClick }) {
   );
 }
 
+/* ─── Modal identifiants administrateur Windows ───────────────── */
+function AdminCredentialsModal({ open, onClose, onSubmit, loading, error, defaultUsername }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setUsername(defaultUsername || "");
+      setPassword("");
+      setShowPwd(false);
+    }
+  }, [open, defaultUsername]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!username.trim() || !password) return;
+    onSubmit({ username: username.trim(), password });
+  };
+
+  if (!open) return null;
+
+  const modalContent = (
+    <div
+      className="modal-overlay"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admin-modal-title"
+    >
+      <div
+        className="animate-scale-in card-glass"
+        style={{ width: "min(400px, 92vw)", padding: 28 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <h2 id="admin-modal-title" style={{ fontSize: 17, fontWeight: 700, color: "var(--text-1)" }}>
+            Identifiants administrateur
+          </h2>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6, minWidth: "auto" }} aria-label="Fermer">
+            <Icons.X />
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 20, lineHeight: 1.5 }}>
+          Cette action nécessite des droits administrateur. Entrez le nom d&apos;utilisateur et le mot de passe de votre session Windows.
+        </p>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 16 }}>
+            <label className="label">Utilisateur Windows</label>
+            <div className="input-wrapper">
+              <span className="input-icon"><Icons.User /></span>
+              <input
+                type="text"
+                className="input input-with-icon"
+                placeholder="Ex: PC-HACK"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                disabled={loading}
+              />
+            </div>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label className="label">Mot de passe</label>
+            <div className="input-wrapper">
+              <span className="input-icon"><Icons.Lock /></span>
+              <input
+                type={showPwd ? "text" : "password"}
+                className="input input-with-icon input-with-icon-right"
+                placeholder="Mot de passe"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="input-icon-right"
+                onClick={() => setShowPwd(!showPwd)}
+                aria-label={showPwd ? "Masquer" : "Afficher"}
+              >
+                <Icons.Eye closed={!showPwd} />
+              </button>
+            </div>
+          </div>
+          {error && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert type="error">{error}</Alert>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button type="button" onClick={onClose} className="btn btn-outline" disabled={loading}>
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading || !username.trim() || !password}
+            >
+              {loading ? <><Icons.Spinner /> Exécution...</> : "Exécuter"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  return createPortal(modalContent, document.body);
+}
+
+/* ─── Modal réinitialisation mot de passe PostgreSQL ───────────── */
+function ResetPasswordModal({ open, onClose, onDone }) {
+  const handleDownload = () => {
+    window.open("/api/system/postgres?action=reset-password-script", "_blank");
+  };
+
+  if (!open) return null;
+
+  const modalContent = (
+    <div
+      className="modal-overlay"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reset-pwd-modal-title"
+    >
+      <div
+        className="animate-scale-in card-glass"
+        style={{ width: "min(440px, 92vw)", padding: 28 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <h2 id="reset-pwd-modal-title" style={{ fontSize: 17, fontWeight: 700, color: "var(--text-1)" }}>
+            Réinitialiser le mot de passe PostgreSQL
+          </h2>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6, minWidth: "auto" }} aria-label="Fermer">
+            <Icons.X />
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 16, lineHeight: 1.5 }}>
+          Si vous avez oublié le mot de passe de l&apos;utilisateur <strong>postgres</strong>, téléchargez le script ci-dessous et exécutez-le en tant qu&apos;administrateur.
+        </p>
+        <ol style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 20, paddingLeft: 20, lineHeight: 1.8 }}>
+          <li>Téléchargez le script PowerShell</li>
+          <li>Clic droit sur le fichier → <strong>Exécuter en tant qu&apos;administrateur</strong></li>
+          <li>Entrez le nouveau mot de passe lorsque demandé</li>
+          <li>Revenez ici et créez la base avec le nouveau mot de passe</li>
+        </ol>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <button type="button" onClick={onClose} className="btn btn-outline">
+            Annuler
+          </button>
+          <button type="button" onClick={handleDownload} className="btn btn-primary">
+            Télécharger le script
+          </button>
+          <button type="button" onClick={onDone} className="btn btn-outline">
+            J&apos;ai réinitialisé, continuer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modalContent, document.body);
+}
+
+/* ─── Modal mot de passe PostgreSQL ───────────────────────────── */
+function PostgresPasswordModal({ open, onClose, onSubmit, loading, error, dbStatus, onResetPassword }) {
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setPassword("");
+      setShowPwd(false);
+    }
+  }, [open]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!password) return;
+    onSubmit(password);
+  };
+
+  if (!open) return null;
+
+  const modalContent = (
+    <div
+      className="modal-overlay"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pg-pwd-modal-title"
+    >
+      <div
+        className="animate-scale-in card-glass"
+        style={{ width: "min(400px, 92vw)", padding: 28 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <h2 id="pg-pwd-modal-title" style={{ fontSize: 17, fontWeight: 700, color: "var(--text-1)" }}>
+            Mot de passe PostgreSQL
+          </h2>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6, minWidth: "auto" }} aria-label="Fermer">
+            <Icons.X />
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 20, lineHeight: 1.5 }}>
+          L&apos;utilisateur <strong>postgres</strong> requiert un mot de passe pour se connecter. Entrez-le ci-dessous (celui défini lors de l&apos;installation de PostgreSQL).
+        </p>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 20 }}>
+            <label className="label">Mot de passe utilisateur postgres</label>
+            <div className="input-wrapper">
+              <span className="input-icon"><Icons.Lock /></span>
+              <input
+                type={showPwd ? "text" : "password"}
+                className="input input-with-icon input-with-icon-right"
+                placeholder="Mot de passe"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="input-icon-right"
+                onClick={() => setShowPwd(!showPwd)}
+                aria-label={showPwd ? "Masquer" : "Afficher"}
+              >
+                <Icons.Eye closed={!showPwd} />
+              </button>
+            </div>
+          </div>
+          {error && (
+            <div style={{ marginBottom: 16 }}>
+              <Alert type="error">{error}</Alert>
+            </div>
+          )}
+          {dbStatus?.platform === "win32" && onResetPassword && (
+            <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 12 }}>
+              <button
+                type="button"
+                onClick={onResetPassword}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--primary-light)", padding: 0, textDecoration: "underline" }}
+              >
+                Mot de passe oublié ? Réinitialiser
+              </button>
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button type="button" onClick={onClose} className="btn btn-outline" disabled={loading}>
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading || !password}
+            >
+              {loading ? <><Icons.Spinner /> Création...</> : "Créer la base"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  return createPortal(modalContent, document.body);
+}
+
+/* ─── Modal Plus d'options PostgreSQL ───────────────────────── */
+function PostgresMoreOptionsModal({ open, onClose, onInstall, loading, dbStatus, onResetPassword }) {
+  const [version, setVersion] = useState("16");
+  const [reinstall, setReinstall] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setVersion("16");
+      setReinstall(!!dbStatus?.installed);
+    }
+  }, [open, dbStatus?.installed]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onInstall({ version, reinstall });
+  };
+
+  if (!open) return null;
+
+  const canInstallBrew = dbStatus?.platform === "darwin" && dbStatus?.hasBrew;
+  const isWindows = dbStatus?.platform === "win32";
+
+  const modalContent = (
+    <div
+      className="modal-overlay"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="more-options-modal-title"
+    >
+      <div
+        className="animate-scale-in card-glass"
+        style={{ width: "min(420px, 92vw)", padding: 28 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <h2 id="more-options-modal-title" style={{ fontSize: 17, fontWeight: 700, color: "var(--text-1)" }}>
+            Plus d&apos;options — PostgreSQL
+          </h2>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6, minWidth: "auto" }} aria-label="Fermer">
+            <Icons.X />
+          </button>
+        </div>
+        <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 20, lineHeight: 1.5 }}>
+          Installez ou réinstallez une version spécifique de PostgreSQL.
+        </p>
+
+        {isWindows ? (
+          <div>
+            <div style={{ marginBottom: 16 }}>
+              <label className="label">Version PostgreSQL</label>
+              <select
+                value={version}
+                onChange={(e) => setVersion(e.target.value)}
+                className="input"
+                style={{ cursor: "pointer" }}
+                disabled={loading}
+              >
+                <option value="14">PostgreSQL 14</option>
+                <option value="15">PostgreSQL 15</option>
+                <option value="16">PostgreSQL 16 (recommandé)</option>
+                <option value="17">PostgreSQL 17</option>
+                <option value="18">PostgreSQL 18</option>
+              </select>
+            </div>
+            {dbStatus?.installed && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--text-2)" }}>
+                  <input type="checkbox" checked={reinstall} onChange={(e) => setReinstall(e.target.checked)} disabled={loading} />
+                  Réinstaller (PostgreSQL est déjà installé)
+                </label>
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+              <div style={{ padding: 12, borderRadius: 8, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)" }}>
+                <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 8 }}>
+                  <strong style={{ color: "var(--text-2)" }}>Option 1 — Télécharger l&apos;installateur</strong><br />
+                  Téléchargement direct du fichier .exe (recommandé si winget bloque).
+                </p>
+                <a
+                  href={`/api/system/postgres?action=download&version=${version}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-outline"
+                  style={{ width: "100%", textAlign: "center" }}
+                >
+                  Télécharger postgresql-{version}-windows-x64.exe
+                </a>
+              </div>
+              <div style={{ padding: 12, borderRadius: 8, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)" }}>
+                <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 8 }}>
+                  <strong style={{ color: "var(--text-2)" }}>Option 2 — Installer par commande</strong><br />
+                  Via winget ou Chocolatey. Peut rester bloqué sur « Démarrage du package... ».
+                </p>
+                <form onSubmit={handleSubmit} style={{ margin: 0 }}>
+                  <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: "100%" }}>
+                    {loading ? <><Icons.Spinner /> Installation...</> : (reinstall ? "Réinstaller via winget/choco" : "Installer via winget/choco")}
+                  </button>
+                </form>
+              </div>
+              {dbStatus?.installed && (
+                <div style={{ padding: 12, borderRadius: 8, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)" }}>
+                  <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 8 }}>
+                    <strong style={{ color: "var(--text-2)" }}>Mot de passe oublié ?</strong><br />
+                    Téléchargez un script pour réinitialiser le mot de passe de l&apos;utilisateur postgres.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); onResetPassword?.(); }}
+                    className="btn btn-outline"
+                    style={{ width: "100%", textAlign: "center" }}
+                  >
+                    Réinitialiser le mot de passe
+                  </button>
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" onClick={onClose} className="btn btn-ghost">
+                Fermer
+              </button>
+            </div>
+          </div>
+        ) : dbStatus?.platform === "linux" ? (
+          <div>
+            <Alert type="info">
+              Sur Linux, utilisez le bouton principal « Installer » pour installer PostgreSQL via apt/yum.
+              La version est celle fournie par votre distribution.
+            </Alert>
+          </div>
+        ) : canInstallBrew ? (
+          <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: 16 }}>
+              <label className="label">Version PostgreSQL</label>
+              <select
+                value={version}
+                onChange={(e) => setVersion(e.target.value)}
+                className="input"
+                style={{ cursor: "pointer" }}
+                disabled={loading}
+              >
+                <option value="14">PostgreSQL 14</option>
+                <option value="15">PostgreSQL 15</option>
+                <option value="16">PostgreSQL 16 (recommandé)</option>
+                <option value="17">PostgreSQL 17</option>
+                <option value="18">PostgreSQL 18</option>
+              </select>
+            </div>
+            {dbStatus?.installed && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: "var(--text-2)" }}>
+                  <input
+                    type="checkbox"
+                    checked={reinstall}
+                    onChange={(e) => setReinstall(e.target.checked)}
+                    disabled={loading}
+                  />
+                  Réinstaller (PostgreSQL est déjà installé)
+                </label>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button type="button" onClick={onClose} className="btn btn-outline" disabled={loading}>
+                Annuler
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? <><Icons.Spinner /> Installation...</> : (reinstall ? "Réinstaller" : "Installer")}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div>
+            <Alert type="warning">
+              Homebrew est requis pour l&apos;installation automatique sur macOS.
+              <a href="https://brew.sh" target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: 8, color: "var(--primary-light)", textDecoration: "underline" }}>
+                Installer Homebrew →
+              </a>
+            </Alert>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return createPortal(modalContent, document.body);
+}
+
 /* ═══════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════════ */
@@ -294,6 +752,12 @@ export default function SetupPage() {
   const [dbError,   setDbError]   = useState("");
   const [dbInfo,    setDbInfo]    = useState("");
   const [installLog,setInstallLog]= useState([]);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminModalError, setAdminModalError] = useState("");
+  const [showPostgresPwdModal, setShowPostgresPwdModal] = useState(false);
+  const [postgresPwdModalError, setPostgresPwdModalError] = useState("");
+  const [showMoreOptionsModal, setShowMoreOptionsModal] = useState(false);
+  const [showResetPwdModal, setShowResetPwdModal] = useState(false);
 
   /* ── PWA ─────────────────────────────────────────────────── */
   useEffect(() => {
@@ -338,21 +802,59 @@ export default function SetupPage() {
   useEffect(() => { if (step === 2) checkDb(); }, [step, checkDb]);
 
   /* ── DB actions ──────────────────────────────────────────── */
-  async function handleStart() {
-    setLoading(true); setDbError("");
+  async function handleStart(credentials = null) {
+    setLoading(true); setDbError(""); setAdminModalError("");
     try {
-      const r    = await fetch("/api/system/postgres", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"start"}) });
+      const body = { action: "start" };
+      if (credentials?.username && credentials?.password) {
+        body.username = credentials.username;
+        body.password = credentials.password;
+      }
+      const r = await fetch("/api/system/postgres", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await r.json();
-      if (data.ok) await checkDb();
-      else setDbError(data.error ?? "Impossible de démarrer PostgreSQL");
-    } catch { setDbError("Erreur de connexion"); }
-    finally { setLoading(false); }
+      if (data.ok) {
+        setShowAdminModal(false);
+        await checkDb();
+      } else {
+        if (data.requiresAdmin && dbStatus?.platform === "win32" && !credentials) {
+          setShowAdminModal(true);
+          setAdminModalError("");
+        } else {
+          setDbError(data.error ?? "Impossible de démarrer PostgreSQL");
+          if (credentials) {
+            setAdminModalError(data.error ?? "Identifiants incorrects.");
+          }
+        }
+      }
+    } catch {
+      setDbError("Erreur de connexion");
+      if (credentials) setAdminModalError("Erreur de connexion");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function handleInstall() {
+  function handleAdminModalSubmit(creds) {
+    handleStart(creds);
+  }
+
+  async function handleInstall(opts = {}) {
+    const { version, reinstall } = opts;
     setDbPhase("installing"); setInstallLog([]); setDbError("");
+    if (opts.version !== undefined) setShowMoreOptionsModal(false);
     try {
-      const resp   = await fetch("/api/system/postgres", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"install"}) });
+      const body = { action: "install" };
+      if (version) body.version = version;
+      if (reinstall) body.reinstall = true;
+      const resp = await fetch("/api/system/postgres", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const reader = resp.body.getReader();
       const dec    = new TextDecoder();
       let buf      = "";
@@ -378,18 +880,43 @@ export default function SetupPage() {
     } catch (e) { setDbError(e.message); setDbPhase("offer-install"); }
   }
 
-  async function handleCreateDb() {
-    setDbPhase("creating"); setDbError("");
+  async function handleCreateDb(postgresPassword = null) {
+    setDbPhase("creating"); setDbError(""); setPostgresPwdModalError("");
     try {
-      const r    = await fetch("/api/system/postgres", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({action:"create-db"}) });
+      const body = { action: "create-db" };
+      if (postgresPassword) body.postgresPassword = postgresPassword;
+      const r = await fetch("/api/system/postgres", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await r.json();
       if (data.ok) {
+        setShowPostgresPwdModal(false);
         setDbInfo(data.message ?? "Base de données prête");
         setDbMode("prisma"); setDbPhase("done-pg");
       } else {
-        setDbError(data.error ?? "Erreur lors de la création"); setDbPhase("offer-create");
+        if (data.requiresPostgresPassword) {
+          setShowPostgresPwdModal(true);
+          setPostgresPwdModalError("");
+          setDbPhase("offer-create");
+        } else {
+          setDbError(data.error ?? "Erreur lors de la création");
+          setDbPhase("offer-create");
+          if (postgresPassword) {
+            setShowPostgresPwdModal(true);
+            setPostgresPwdModalError(data.error ?? "Mot de passe incorrect.");
+          }
+        }
       }
-    } catch (e) { setDbError(e.message); setDbPhase("offer-create"); }
+    } catch (e) {
+      setDbError(e.message);
+      setDbPhase("offer-create");
+      if (postgresPassword) {
+        setShowPostgresPwdModal(true);
+        setPostgresPwdModalError(e.message);
+      }
+    }
   }
 
   async function handleUseJson() {
@@ -555,8 +1082,8 @@ export default function SetupPage() {
                   </div>
                 )}
 
-                {/* Erreur non-critique */}
-                {!dbChecking && dbError && dbPhase !== "installing" && dbPhase !== "creating" && (
+                {/* Erreur non-critique (exclure offer-create qui a son propre affichage) */}
+                {!dbChecking && dbError && dbPhase !== "installing" && dbPhase !== "creating" && dbPhase !== "offer-create" && (
                   <Alert type="error">{dbError}</Alert>
                 )}
 
@@ -597,14 +1124,14 @@ export default function SetupPage() {
                           Recommandé — performant, robuste, prêt pour des milliers de fichiers.
                         </p>
                         <button
-                          onClick={handleInstall}
+                          onClick={() => handleInstall(dbStatus?.platform === "win32" ? { version: "16" } : undefined)}
                           className="btn btn-primary"
                           style={{ width: "100%", padding: "9px 14px", fontSize: 12 }}
                           disabled={dbStatus?.platform === "darwin" && !dbStatus?.hasBrew}
                         >
                           {dbStatus?.platform === "darwin"
                             ? dbStatus?.hasBrew ? "Installer via Homebrew" : "Homebrew requis"
-                            : dbStatus?.platform === "win32" ? "Non disponible" : "Installer"}
+                            : dbStatus?.platform === "win32" ? "Installer (winget/Chocolatey)" : "Installer"}
                         </button>
                         {dbStatus?.platform === "darwin" && !dbStatus?.hasBrew && (
                           <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 7, textAlign: "center" }}>
@@ -615,9 +1142,12 @@ export default function SetupPage() {
                         )}
                         {dbStatus?.platform === "win32" && (
                           <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 7, textAlign: "center" }}>
-                            <a href="https://www.postgresql.org/download/windows/" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary-light)", textDecoration: "underline" }}>Télécharger</a>
-                            {" "}puis{" "}
-                            <button onClick={checkDb} style={{ background:"none",border:"none",cursor:"pointer",color:"var(--primary-light)",fontSize:11,padding:0,textDecoration:"underline" }}>revérifier</button>
+                            Ou{" "}
+                            <button onClick={() => setShowMoreOptionsModal(true)} style={{ background:"none",border:"none",cursor:"pointer",color:"var(--primary-light)",fontSize:11,padding:0,textDecoration:"underline" }}>
+                              choisir une version spécifique
+                            </button>
+                            {" · "}
+                            <a href="https://www.postgresql.org/download/windows/" target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary-light)", textDecoration: "underline" }}>Télécharger manuellement</a>
                           </p>
                         )}
                       </div>
@@ -654,14 +1184,37 @@ export default function SetupPage() {
                     <Alert type="warning">
                       PostgreSQL est installé mais le service n'est pas démarré.
                     </Alert>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <button onClick={handleStart} disabled={loading} className="btn btn-primary" style={{ flex: 1 }}>
-                        {loading ? <><Icons.Spinner /> Démarrage...</> : "Démarrer PostgreSQL"}
+                    {dbError && dbError.includes("net start") && (
+                      <div style={{
+                        marginTop: 12, padding: "12px 14px", borderRadius: 8,
+                        background: "var(--bg-2)", border: "1px solid var(--border)",
+                        fontFamily: "monospace", fontSize: 12, color: "var(--text-2)",
+                      }}>
+                        <p style={{ marginBottom: 6, fontSize: 11, color: "var(--text-3)" }}>Commande à exécuter en tant qu'administrateur :</p>
+                        <code style={{ wordBreak: "break-all" }}>{dbError.match(/net start \S+/)?.[0] || "net start postgresql-x64-16"}</code>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                      <button onClick={() => handleStart()} disabled={loading} className="btn btn-primary" style={{ flex: 1 }}>
+                        {loading ? <><Icons.Spinner /> Démarrage...</> : "Démarrer PostgreSQL (UAC)"}
                       </button>
                       <button onClick={handleUseJson} disabled={loading} className="btn btn-outline">
                         Utiliser JSON
                       </button>
                     </div>
+                    {dbStatus?.platform === "win32" && (
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 10 }}>
+                        Un clic sur « Démarrer » ouvrira une fenêtre UAC — validez pour lancer le service.
+                        {" "}
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminModal(true)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--primary-light)", fontSize: 11, padding: 0, textDecoration: "underline" }}
+                        >
+                          Ou entrer des identifiants administrateur
+                        </button>
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -671,15 +1224,43 @@ export default function SetupPage() {
                     <Alert type="success">
                       PostgreSQL est actif et prêt. La base <strong>structureFolderDB</strong> va être créée et initialisée automatiquement.
                     </Alert>
-                    {dbError && <Alert type="error">{dbError}</Alert>}
+                    {dbError && (
+                      <div style={{ marginBottom: 12 }}>
+                        <Alert type="error">
+                          {dbError}
+                          {dbError.includes("connecter") && (
+                            <span style={{ display: "block", marginTop: 8 }}>
+                              <button
+                                type="button"
+                                onClick={() => { setShowPostgresPwdModal(true); setDbError(""); }}
+                                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--primary-light)", fontSize: 12, padding: 0, textDecoration: "underline" }}
+                              >
+                                Entrer le mot de passe PostgreSQL
+                              </button>
+                            </span>
+                          )}
+                        </Alert>
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: 10 }}>
-                      <button onClick={handleCreateDb} className="btn btn-primary" style={{ flex: 1, padding: "11px 18px" }}>
+                      <button onClick={() => handleCreateDb()} className="btn btn-primary" style={{ flex: 1, padding: "11px 18px" }}>
                         <Icons.Database size={15} /> Créer la base de données
                       </button>
                       <button onClick={handleUseJson} className="btn btn-outline">
                         Utiliser JSON
                       </button>
                     </div>
+                    {dbStatus?.platform === "win32" && (
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 10 }}>
+                        <button
+                          type="button"
+                          onClick={() => setShowPostgresPwdModal(true)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--primary-light)", fontSize: 11, padding: 0, textDecoration: "underline" }}
+                        >
+                          L&apos;utilisateur postgres a un mot de passe ?
+                        </button>
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -760,10 +1341,18 @@ export default function SetupPage() {
                   </div>
                 )}
 
-                {/* Footer retour */}
+                {/* Footer retour + Plus d'options */}
                 {!dbChecking && !["done-pg","done-json","installing","creating"].includes(dbPhase) && (
-                  <div style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,.05)" }}>
+                  <div style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,.05)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                     <BackBtn onClick={() => setStep(1)} />
+                    <button
+                      type="button"
+                      onClick={() => setShowMoreOptionsModal(true)}
+                      className="btn btn-ghost"
+                      style={{ fontSize: 12, gap: 5 }}
+                    >
+                      <Icons.Plus /> Plus d&apos;options
+                    </button>
                   </div>
                 )}
               </div>
@@ -969,6 +1558,44 @@ export default function SetupPage() {
 
         </div>
       </div>
+
+      {/* Modal identifiants admin Windows (démarrage PostgreSQL) */}
+      <AdminCredentialsModal
+        open={showAdminModal}
+        onClose={() => { setShowAdminModal(false); setAdminModalError(""); }}
+        onSubmit={handleAdminModalSubmit}
+        loading={loading}
+        error={adminModalError}
+        defaultUsername={dbStatus?.currentUser}
+      />
+
+      {/* Modal mot de passe PostgreSQL (création base) */}
+      <PostgresPasswordModal
+        open={showPostgresPwdModal}
+        onClose={() => { setShowPostgresPwdModal(false); setPostgresPwdModalError(""); }}
+        onSubmit={(pwd) => handleCreateDb(pwd)}
+        loading={dbPhase === "creating"}
+        error={postgresPwdModalError}
+        dbStatus={dbStatus}
+        onResetPassword={() => { setShowPostgresPwdModal(false); setShowResetPwdModal(true); }}
+      />
+
+      {/* Modal réinitialisation mot de passe PostgreSQL */}
+      <ResetPasswordModal
+        open={showResetPwdModal}
+        onClose={() => setShowResetPwdModal(false)}
+        onDone={() => { setShowResetPwdModal(false); setShowPostgresPwdModal(true); }}
+      />
+
+      {/* Modal Plus d'options PostgreSQL */}
+      <PostgresMoreOptionsModal
+        open={showMoreOptionsModal}
+        onClose={() => setShowMoreOptionsModal(false)}
+        onInstall={handleInstall}
+        loading={dbPhase === "installing"}
+        dbStatus={dbStatus}
+        onResetPassword={() => { setShowMoreOptionsModal(false); setShowResetPwdModal(true); }}
+      />
     </>
   );
 }
